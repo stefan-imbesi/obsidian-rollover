@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build output (released via GitHub Releases, not committed)
+main.js
+*.js.map
+
+# Local plugin data written by Obsidian at runtime
+data.json
+
+# OS / editor cruft
+.DS_Store
+.idea/
+.vscode/
+
+# Logs
+npm-debug.log*
+yarn-error.log*

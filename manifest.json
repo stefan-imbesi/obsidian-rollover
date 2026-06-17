@@ -1,0 +1,10 @@
+{
+	"id": "obsidian-checkin",
+	"name": "Check-in",
+	"version": "1.0.0",
+	"minAppVersion": "1.4.0",
+	"description": "Automate date-stamped daily check-in notes — mark yesterday done, create today's note in one command.",
+	"author": "Stefan Imbesi",
+	"authorUrl": "https://github.com/stefan-imbesi",
+	"isDesktopOnly": false
+}

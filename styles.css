@@ -1,0 +1,35 @@
+/* Check-in settings tab — live previews */
+
+.checkin-preview-block {
+	margin: 0.75em 0 1.5em;
+	padding: 0.6em 0.85em;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.6;
+}
+
+.checkin-preview-title {
+	color: var(--text-muted);
+	margin-bottom: 0.25em;
+}
+
+.checkin-preview-line {
+	white-space: pre;
+	color: var(--text-normal);
+}
+
+.checkin-preview-inline {
+	font-family: var(--font-monospace);
+	color: var(--text-accent);
+}
+
+.checkin-format-reference {
+	display: block;
+	margin-top: 0.4em;
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	white-space: pre;
+}
