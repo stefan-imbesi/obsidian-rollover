@@ -1,5 +1,5 @@
 import { App, Notice, TFile, TFolder, normalizePath } from "obsidian";
-import { CheckinSettings } from "./settings";
+import { RolloverSettings } from "./settings";
 import { MomentInstance, formatDate, now, parseDate } from "./date";
 import { buildPendingPattern, joinPath } from "./utils";
 
@@ -9,10 +9,10 @@ interface PendingNote {
 }
 
 /**
- * Primary command. Marks the most recent open check-in as done (if any), then
+ * Primary command. Marks the most recent open note as done (if any), then
  * creates today's note in the same folder.
  */
-export async function runCheckin(app: App, settings: CheckinSettings): Promise<void> {
+export async function runRollover(app: App, settings: RolloverSettings): Promise<void> {
 	const folder = resolveTargetFolder(app, settings);
 	if (!folder) return; // resolveTargetFolder shows the relevant Notice
 
@@ -21,7 +21,7 @@ export async function runCheckin(app: App, settings: CheckinSettings): Promise<v
 		pending.sort((a, b) => b.date.valueOf() - a.date.valueOf());
 		if (pending.length > 1) {
 			new Notice(
-				"Check-in: Multiple open notes found — renamed the most recent. Check your folder for others."
+				"Rollover: Multiple open notes found — closed the most recent. Check your folder for others."
 			);
 		}
 		await renameToDone(app, pending[0].file, settings);
@@ -31,7 +31,7 @@ export async function runCheckin(app: App, settings: CheckinSettings): Promise<v
 }
 
 /** Whether the active note's name ends with the configured pending marker. */
-export function activeNoteIsPending(app: App, settings: CheckinSettings): boolean {
+export function activeNoteIsPending(app: App, settings: RolloverSettings): boolean {
 	if (!settings.pendingMarker) return false;
 	const file = app.workspace.getActiveFile();
 	if (!file || file.extension !== "md") return false;
@@ -39,7 +39,7 @@ export function activeNoteIsPending(app: App, settings: CheckinSettings): boolea
 }
 
 /** Secondary command. Renames only the active note from pending to done. */
-export async function markActiveNoteDone(app: App, settings: CheckinSettings): Promise<void> {
+export async function markActiveNoteDone(app: App, settings: RolloverSettings): Promise<void> {
 	const file = app.workspace.getActiveFile();
 	if (!file) return;
 	await renameToDone(app, file, settings);
@@ -47,16 +47,16 @@ export async function markActiveNoteDone(app: App, settings: CheckinSettings): P
 
 // ── Internals ───────────────────────────────────────────────────────────────
 
-function resolveTargetFolder(app: App, settings: CheckinSettings): TFolder | null {
+function resolveTargetFolder(app: App, settings: RolloverSettings): TFolder | null {
 	if (settings.folderMode === "fixed") {
 		const path = settings.fixedFolderPath.trim();
 		if (!path) {
-			new Notice("Check-in: No fixed folder path is set. Configure it in settings.");
+			new Notice("Rollover: No fixed folder path is set. Configure it in settings.");
 			return null;
 		}
 		const folder = getFolder(app, normalizePath(path));
 		if (!folder) {
-			new Notice(`Check-in: Folder not found — ${path}.`);
+			new Notice(`Rollover: Folder not found — ${path}.`);
 			return null;
 		}
 		return folder;
@@ -64,23 +64,23 @@ function resolveTargetFolder(app: App, settings: CheckinSettings): TFolder | nul
 
 	const activeFile = app.workspace.getActiveFile();
 	if (!activeFile) {
-		new Notice("Check-in: No file is open. Open a note in the target folder first.");
+		new Notice("Rollover: No file is open. Open a note in the target folder first.");
 		return null;
 	}
 	if (!activeFile.parent) {
-		new Notice("Check-in: The active file has no parent folder.");
+		new Notice("Rollover: The active file has no parent folder.");
 		return null;
 	}
 	return activeFile.parent;
 }
 
-/** Resolve a folder by path. Uses getAbstractFileByPath for 1.4.0+ compatibility. */
+/** Resolve a folder by its vault-relative path, or null if it isn't a folder. */
 function getFolder(app: App, path: string): TFolder | null {
 	const file = app.vault.getAbstractFileByPath(path);
 	return file instanceof TFolder ? file : null;
 }
 
-function findPendingNotes(app: App, folder: TFolder, settings: CheckinSettings): PendingNote[] {
+function findPendingNotes(app: App, folder: TFolder, settings: RolloverSettings): PendingNote[] {
 	const pattern = buildPendingPattern(settings.noteLabel, settings.pendingMarker);
 	const found: PendingNote[] = [];
 
@@ -96,7 +96,7 @@ function findPendingNotes(app: App, folder: TFolder, settings: CheckinSettings):
 	return found;
 }
 
-async function renameToDone(app: App, file: TFile, settings: CheckinSettings): Promise<void> {
+async function renameToDone(app: App, file: TFile, settings: RolloverSettings): Promise<void> {
 	const oldBasename = file.basename;
 	const stem = oldBasename.slice(0, oldBasename.length - settings.pendingMarker.length);
 	const newBasename = stem + settings.doneMarker;
@@ -107,17 +107,17 @@ async function renameToDone(app: App, file: TFile, settings: CheckinSettings): P
 	await app.fileManager.renameFile(file, newPath);
 
 	if (settings.showRenameNotice) {
-		new Notice(`✓ ${oldBasename} marked done.`);
+		new Notice(`✓ ${oldBasename} closed.`);
 	}
 }
 
-async function createTodayNote(app: App, folder: TFolder, settings: CheckinSettings): Promise<void> {
+async function createTodayNote(app: App, folder: TFolder, settings: RolloverSettings): Promise<void> {
 	const newBasename = formatDate(settings.dateFormat) + settings.noteLabel + settings.pendingMarker;
 	const newPath = normalizePath(joinPath(folder.path, `${newBasename}.md`));
 
 	const existing = app.vault.getAbstractFileByPath(newPath);
 	if (existing instanceof TFile) {
-		new Notice("Check-in: Today's note already exists.");
+		new Notice("Rollover: Today's note already exists.");
 		if (settings.openOnCreate) {
 			await app.workspace.getLeaf(false).openFile(existing);
 		}
@@ -133,13 +133,13 @@ async function createTodayNote(app: App, folder: TFolder, settings: CheckinSetti
 	}
 }
 
-async function buildContent(app: App, settings: CheckinSettings): Promise<string> {
+async function buildContent(app: App, settings: RolloverSettings): Promise<string> {
 	const templatePath = settings.templatePath.trim();
 	if (!templatePath) return "";
 
 	const file = app.vault.getAbstractFileByPath(normalizePath(templatePath));
 	if (!(file instanceof TFile)) {
-		new Notice(`Check-in: Template not found at ${templatePath}. Creating empty note.`);
+		new Notice(`Rollover: Template not found at ${templatePath}. Creating empty note.`);
 		return "";
 	}
 
@@ -147,23 +147,21 @@ async function buildContent(app: App, settings: CheckinSettings): Promise<string
 	return substituteTokens(raw, settings);
 }
 
-/** Replace template tokens with values derived from today's date and settings. */
+/**
+ * Replace template tokens with values derived from today's date and settings,
+ * in a single pass over the template.
+ */
 export function substituteTokens(
 	template: string,
-	settings: CheckinSettings,
+	settings: RolloverSettings,
 	instance?: MomentInstance
 ): string {
 	const m = instance ?? now();
-	const replacements: Record<string, string> = {
-		"{{date}}": m.format(settings.dateFormat),
-		"{{label}}": settings.noteLabel,
-		"{{day}}": m.format("dddd"),
-		"{{isoDate}}": m.format("YYYY-MM-DD"),
+	const values: Record<string, string> = {
+		date: m.format(settings.dateFormat),
+		label: settings.noteLabel,
+		day: m.format("dddd"),
+		isoDate: m.format("YYYY-MM-DD"),
 	};
-
-	let result = template;
-	for (const [token, value] of Object.entries(replacements)) {
-		result = result.split(token).join(value);
-	}
-	return result;
+	return template.replace(/\{\{(date|label|day|isoDate)\}\}/g, (_match, key: string) => values[key]);
 }

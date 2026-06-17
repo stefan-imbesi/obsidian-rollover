@@ -1,16 +1,16 @@
-import { AbstractInputSuggest, App, PluginSettingTab, Setting, TFile, moment } from "obsidian";
-import type CheckinPlugin from "./main";
+import { AbstractInputSuggest, App, PluginSettingTab, Setting, TFile, debounce, moment } from "obsidian";
+import type RolloverPlugin from "./main";
 
-export interface CheckinSettings {
+export interface RolloverSettings {
 	// — Folder targeting —
 	folderMode: "active" | "fixed";
 	fixedFolderPath: string;
 
 	// — Naming —
-	dateFormat: string; // moment.js tokens, e.g. "YY.MM.DD"
-	noteLabel: string; // e.g. " — Check in"
-	pendingMarker: string; // e.g. " —"
-	doneMarker: string; // e.g. " ✓"
+	dateFormat: string; // moment.js tokens, e.g. "YYYY-MM-DD"
+	noteLabel: string; // text after the date, e.g. "" or " — Log"
+	pendingMarker: string; // marks an open note, e.g. " —"
+	doneMarker: string; // replaces the pending marker when closed, e.g. " ✓"
 
 	// — Template —
 	templatePath: string; // vault-relative path to a .md template file, or ""
@@ -20,11 +20,11 @@ export interface CheckinSettings {
 	showRenameNotice: boolean;
 }
 
-export const DEFAULT_SETTINGS: CheckinSettings = {
+export const DEFAULT_SETTINGS: RolloverSettings = {
 	folderMode: "active",
 	fixedFolderPath: "",
-	dateFormat: "YY.MM.DD",
-	noteLabel: " — Check in",
+	dateFormat: "YYYY-MM-DD",
+	noteLabel: "",
 	pendingMarker: " —",
 	doneMarker: " ✓",
 	templatePath: "",
@@ -34,20 +34,29 @@ export const DEFAULT_SETTINGS: CheckinSettings = {
 
 /** Autocomplete for picking a Markdown file by its vault-relative path. */
 class FileSuggest extends AbstractInputSuggest<TFile> {
+	private readonly files: TFile[];
+
 	constructor(
-		private appRef: App,
+		app: App,
 		private inputEl: HTMLInputElement,
 		private onSelectCb: (value: string) => void
 	) {
-		super(appRef, inputEl);
+		super(app, inputEl);
+		// Snapshot the file list once per suggester rather than rebuilding it (and
+		// lowercasing every path) on every keystroke.
+		this.files = app.vault.getMarkdownFiles();
 	}
 
 	getSuggestions(query: string): TFile[] {
 		const lower = query.toLowerCase();
-		return this.appRef.vault
-			.getMarkdownFiles()
-			.filter((file) => file.path.toLowerCase().includes(lower))
-			.slice(0, 50);
+		const matches: TFile[] = [];
+		for (const file of this.files) {
+			if (file.path.toLowerCase().includes(lower)) {
+				matches.push(file);
+				if (matches.length === 50) break; // cap results and stop scanning early
+			}
+		}
+		return matches;
 	}
 
 	renderSuggestion(file: TFile, el: HTMLElement): void {
@@ -62,34 +71,41 @@ class FileSuggest extends AbstractInputSuggest<TFile> {
 	}
 }
 
-export class CheckinSettingTab extends PluginSettingTab {
-	private plugin: CheckinPlugin;
+export class RolloverSettingTab extends PluginSettingTab {
+	private plugin: RolloverPlugin;
+	private queueSave: () => void;
 
-	constructor(app: App, plugin: CheckinPlugin) {
+	constructor(app: App, plugin: RolloverPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+		// Coalesce rapid text edits into a single disk write (trailing debounce).
+		this.queueSave = debounce(() => void this.plugin.saveSettings(), 400, true);
+	}
+
+	hide(): void {
+		// Flush any pending debounced write when the settings pane closes.
+		void this.plugin.saveSettings();
 	}
 
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
 		const s = this.plugin.settings;
-		const save = () => this.plugin.saveSettings();
+		const queueSave = this.queueSave; // debounced — for free-text inputs
+		const saveNow = () => void this.plugin.saveSettings(); // immediate — for discrete controls
 
-		// ── Group 1: Folder ──────────────────────────────────────────────
-		containerEl.createEl("h3", { text: "Folder" });
-
+		// ── Folder (general settings, no heading) ─────────────────────────
 		new Setting(containerEl)
 			.setName("Folder mode")
-			.setDesc("Where new check-in notes are created.")
+			.setDesc("Where new notes are created.")
 			.addDropdown((dd) =>
 				dd
 					.addOption("active", "Active file's folder")
 					.addOption("fixed", "Fixed folder")
 					.setValue(s.folderMode)
-					.onChange(async (value) => {
+					.onChange((value) => {
 						s.folderMode = value === "fixed" ? "fixed" : "active";
-						await save();
+						saveNow();
 						this.display(); // re-render to show/hide the path field
 					})
 			);
@@ -100,102 +116,104 @@ export class CheckinSettingTab extends PluginSettingTab {
 				.setDesc("Enter a vault-relative path. Leave blank to use the active file's folder.")
 				.addText((text) =>
 					text
-						.setPlaceholder("e.g. 2026/Cycle/26.12")
+						.setPlaceholder("e.g. Journal/2026")
 						.setValue(s.fixedFolderPath)
-						.onChange(async (value) => {
+						.onChange((value) => {
 							s.fixedFolderPath = value;
-							await save();
+							queueSave();
 						})
 				);
 		}
 
-		// ── Group 2: File naming ─────────────────────────────────────────
-		containerEl.createEl("h3", { text: "File naming" });
+		// ── File naming ───────────────────────────────────────────────────
+		new Setting(containerEl).setName("File naming").setHeading();
 
 		// Date format — with a live "today" preview and a token reference.
 		const dateSetting = new Setting(containerEl).setName("Date format");
 		dateSetting.descEl.empty();
 		dateSetting.descEl.appendText("Uses Moment.js tokens. Today's preview: ");
 		const datePreviewEl = dateSetting.descEl.createEl("span", {
-			cls: "checkin-preview-inline",
+			cls: "rollover-preview-inline",
 		});
 		const referenceEl = dateSetting.descEl.createEl("small", {
-			cls: "checkin-format-reference",
+			cls: "rollover-format-reference",
 		});
+		const ref = moment();
 		referenceEl.setText(
-			`YY = ${moment().format("YY")}    YYYY = ${moment().format("YYYY")}\n` +
-				`MM = ${moment().format("MM")}    DD = ${moment().format("DD")}`
+			`YY = ${ref.format("YY")}    YYYY = ${ref.format("YYYY")}\n` +
+				`MM = ${ref.format("MM")}    DD = ${ref.format("DD")}`
 		);
 		dateSetting.addText((text) =>
 			text
-				.setPlaceholder("YY.MM.DD")
+				.setPlaceholder("YYYY-MM-DD")
 				.setValue(s.dateFormat)
-				.onChange(async (value) => {
+				.onChange((value) => {
 					s.dateFormat = value;
-					await save();
+					queueSave();
 					refreshPreviews();
 				})
 		);
 
 		new Setting(containerEl)
 			.setName("Note label")
-			.setDesc("Text that appears after the date in every note name.")
+			.setDesc("Optional text after the date in every note name, e.g. \" — Log\".")
 			.addText((text) =>
 				text
-					.setPlaceholder(" — Check in")
+					.setPlaceholder("(none)")
 					.setValue(s.noteLabel)
-					.onChange(async (value) => {
+					.onChange((value) => {
 						s.noteLabel = value;
-						await save();
+						queueSave();
 						refreshPreviews();
 					})
 			);
 
 		new Setting(containerEl)
 			.setName("Pending marker")
-			.setDesc("Appended to a note's name to indicate it is still open.")
+			.setDesc("Appended to a note's name to mark it as still open.")
 			.addText((text) =>
 				text
 					.setPlaceholder(" —")
 					.setValue(s.pendingMarker)
-					.onChange(async (value) => {
+					.onChange((value) => {
 						s.pendingMarker = value;
-						await save();
+						queueSave();
 						refreshPreviews();
 					})
 			);
 
 		new Setting(containerEl)
 			.setName("Done marker")
-			.setDesc("Replaces the pending marker when a note is marked complete.")
+			.setDesc("Replaces the pending marker when a note is closed.")
 			.addText((text) =>
 				text
 					.setPlaceholder(" ✓")
 					.setValue(s.doneMarker)
-					.onChange(async (value) => {
+					.onChange((value) => {
 						s.doneMarker = value;
-						await save();
+						queueSave();
 						refreshPreviews();
 					})
 			);
 
 		// Live note-name preview block (done = yesterday, pending = today).
-		const previewBlock = containerEl.createDiv({ cls: "checkin-preview-block" });
-		previewBlock.createDiv({ cls: "checkin-preview-title", text: "Preview:" });
-		const doneLine = previewBlock.createDiv({ cls: "checkin-preview-line" });
-		const pendingLine = previewBlock.createDiv({ cls: "checkin-preview-line" });
+		const previewBlock = containerEl.createDiv({ cls: "rollover-preview-block" });
+		previewBlock.createDiv({ cls: "rollover-preview-title", text: "Preview:" });
+		const doneLine = previewBlock.createDiv({ cls: "rollover-preview-line" });
+		const pendingLine = previewBlock.createDiv({ cls: "rollover-preview-line" });
 
 		const refreshPreviews = () => {
-			const today = s.dateFormat ? moment().format(s.dateFormat) : "";
-			const yesterday = s.dateFormat ? moment().subtract(1, "day").format(s.dateFormat) : "";
+			const m = moment();
+			const today = s.dateFormat ? m.format(s.dateFormat) : "";
+			const yesterday = s.dateFormat ? m.clone().subtract(1, "day").format(s.dateFormat) : "";
 			datePreviewEl.setText(today || "(empty format)");
 			doneLine.setText(`Done:    ${yesterday}${s.noteLabel}${s.doneMarker}`);
 			pendingLine.setText(`Pending: ${today}${s.noteLabel}${s.pendingMarker}`);
 		};
 		refreshPreviews();
 
-		// ── Group 3: Template ────────────────────────────────────────────
-		containerEl.createEl("h3", { text: "Template" });
+		// ── Template ──────────────────────────────────────────────────────
+		new Setting(containerEl).setName("Template").setHeading();
 
 		const templateSetting = new Setting(containerEl).setName("Template file");
 		templateSetting.descEl.empty();
@@ -210,38 +228,38 @@ export class CheckinSettingTab extends PluginSettingTab {
 		templateSetting.descEl.appendText(".");
 		templateSetting.addText((text) => {
 			text
-				.setPlaceholder("e.g. Templates/daily-checkin.md")
+				.setPlaceholder("e.g. Templates/daily.md")
 				.setValue(s.templatePath)
-				.onChange(async (value) => {
+				.onChange((value) => {
 					s.templatePath = value;
-					await save();
+					queueSave();
 				});
-			new FileSuggest(this.app, text.inputEl, async (value) => {
+			new FileSuggest(this.app, text.inputEl, (value) => {
 				s.templatePath = value;
-				await save();
+				saveNow();
 			});
 		});
 
-		// ── Group 4: Behaviour ───────────────────────────────────────────
-		containerEl.createEl("h3", { text: "Behaviour" });
+		// ── Behaviour ─────────────────────────────────────────────────────
+		new Setting(containerEl).setName("Behaviour").setHeading();
 
 		new Setting(containerEl)
 			.setName("Open note on create")
 			.setDesc("Open the new note after creating it.")
 			.addToggle((toggle) =>
-				toggle.setValue(s.openOnCreate).onChange(async (value) => {
+				toggle.setValue(s.openOnCreate).onChange((value) => {
 					s.openOnCreate = value;
-					await save();
+					saveNow();
 				})
 			);
 
 		new Setting(containerEl)
-			.setName("Show rename notice")
+			.setName("Show notice when a note is closed")
 			.setDesc("Show a confirmation when the previous note is marked done.")
 			.addToggle((toggle) =>
-				toggle.setValue(s.showRenameNotice).onChange(async (value) => {
+				toggle.setValue(s.showRenameNotice).onChange((value) => {
 					s.showRenameNotice = value;
-					await save();
+					saveNow();
 				})
 			);
 	}

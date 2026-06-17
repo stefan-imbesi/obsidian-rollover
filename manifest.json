@@ -1,9 +1,9 @@
 {
-	"id": "obsidian-checkin",
-	"name": "Check-in",
+	"id": "rollover",
+	"name": "Rollover",
 	"version": "1.0.0",
-	"minAppVersion": "1.4.0",
-	"description": "Automate date-stamped daily check-in notes — mark yesterday done, create today's note in one command.",
+	"minAppVersion": "1.5.0",
+	"description": "Close the previous dated note and open today's, in one command — date-stamped, with optional templating.",
 	"author": "Stefan Imbesi",
 	"authorUrl": "https://github.com/stefan-imbesi",
 	"isDesktopOnly": false

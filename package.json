@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-checkin",
+	"name": "obsidian-rollover",
 	"version": "1.0.0",
-	"description": "Automate date-stamped daily check-in notes — mark yesterday done, create today's note in one command.",
+	"description": "Close the previous dated note and open today's, in one command — date-stamped, with optional templating.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
@@ -12,7 +12,7 @@
 		"obsidian",
 		"obsidian-plugin",
 		"daily-notes",
-		"checkin"
+		"rollover"
 	],
 	"author": "Stefan Imbesi",
 	"license": "MIT",

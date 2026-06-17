@@ -1,6 +1,6 @@
-/* Check-in settings tab — live previews */
+/* Rollover settings tab — live previews */
 
-.checkin-preview-block {
+.rollover-preview-block {
 	margin: 0.75em 0 1.5em;
 	padding: 0.6em 0.85em;
 	background: var(--background-secondary);
@@ -11,22 +11,22 @@
 	line-height: 1.6;
 }
 
-.checkin-preview-title {
+.rollover-preview-title {
 	color: var(--text-muted);
 	margin-bottom: 0.25em;
 }
 
-.checkin-preview-line {
+.rollover-preview-line {
 	white-space: pre;
 	color: var(--text-normal);
 }
 
-.checkin-preview-inline {
+.rollover-preview-inline {
 	font-family: var(--font-monospace);
 	color: var(--text-accent);
 }
 
-.checkin-format-reference {
+.rollover-format-reference {
 	display: block;
 	margin-top: 0.4em;
 	color: var(--text-muted);

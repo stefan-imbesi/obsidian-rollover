@@ -1,23 +1,23 @@
 import { Notice, Plugin } from "obsidian";
-import { CheckinSettings, CheckinSettingTab, DEFAULT_SETTINGS } from "./settings";
-import { activeNoteIsPending, markActiveNoteDone, runCheckin } from "./checkin";
+import { RolloverSettings, RolloverSettingTab, DEFAULT_SETTINGS } from "./settings";
+import { activeNoteIsPending, markActiveNoteDone, runRollover } from "./rollover";
 
-export default class CheckinPlugin extends Plugin {
-	settings: CheckinSettings;
+export default class RolloverPlugin extends Plugin {
+	settings: RolloverSettings;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
 
 		this.addCommand({
-			id: "new-checkin",
-			name: "New Check-in",
+			id: "roll-over",
+			name: "Roll over to today's note",
 			callback: () => {
-				void this.runCheckinSafely();
+				void this.runRolloverSafely();
 			},
 		});
 
 		this.addCommand({
-			id: "mark-checkin-done",
+			id: "mark-done",
 			name: "Mark current note as done",
 			checkCallback: (checking: boolean) => {
 				if (!activeNoteIsPending(this.app, this.settings)) return false;
@@ -28,15 +28,15 @@ export default class CheckinPlugin extends Plugin {
 			},
 		});
 
-		this.addSettingTab(new CheckinSettingTab(this.app, this));
+		this.addSettingTab(new RolloverSettingTab(this.app, this));
 	}
 
-	private async runCheckinSafely(): Promise<void> {
+	private async runRolloverSafely(): Promise<void> {
 		try {
-			await runCheckin(this.app, this.settings);
+			await runRollover(this.app, this.settings);
 		} catch (error) {
-			console.error("Check-in: unexpected error during New Check-in.", error);
-			new Notice("Check-in: Something went wrong. See the developer console for details.");
+			console.error("Rollover: unexpected error during roll over.", error);
+			new Notice("Rollover: Something went wrong. See the developer console for details.");
 		}
 	}
 
@@ -44,8 +44,8 @@ export default class CheckinPlugin extends Plugin {
 		try {
 			await markActiveNoteDone(this.app, this.settings);
 		} catch (error) {
-			console.error("Check-in: unexpected error while marking the note done.", error);
-			new Notice("Check-in: Something went wrong. See the developer console for details.");
+			console.error("Rollover: unexpected error while marking the note done.", error);
+			new Notice("Rollover: Something went wrong. See the developer console for details.");
 		}
 	}
 
