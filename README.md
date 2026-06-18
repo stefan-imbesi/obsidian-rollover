@@ -11,7 +11,7 @@ Running **Roll over to today's note**:
 1. **Finds** the most recent open note in the target folder — a note whose name ends with your *pending marker*.
 2. **Closes** it by replacing the pending marker with your *done marker*, using Obsidian's `FileManager.renameFile` so internal links to the note update automatically.
 3. **Creates** a new note named with today's real date plus your label and pending marker, in the same folder.
-4. **Applies** an optional template, with token substitution, to the new note.
+4. **Fills** the new note — optionally carrying over a copy of the previous note's content, or applying a template with token substitution (otherwise it's empty).
 
 Because the new note always uses today's actual date (never "previous + 1"), it works correctly even when you skip days — weekends, holidays, or any gap.
 
@@ -53,7 +53,8 @@ Neither command sets a default hotkey — assign your own in **Settings → Hotk
 - **Pending marker** — marks an open note, e.g. ` —`.
 - **Done marker** — replaces the pending marker when closed, e.g. ` ✓`.
 
-**Template**
+**New note content**
+- **Carry over previous content** — start today's note as a copy of the previous note's content, ready to edit (default off).
 - **Template file** — optional vault-relative `.md` path (with file autocomplete).
 
 **Behaviour**
@@ -72,6 +73,8 @@ If a template file is configured, its contents are copied into the new note with
 | `{{label}}` | The configured note label |
 | `{{day}}` | Full day name, e.g. `Wednesday` |
 | `{{isoDate}}` | Full ISO date, e.g. `2026-06-17` |
+
+**Content precedence:** if **Carry over previous content** is on, today's note is seeded with a copy of the previous note instead — the template is then used only on the first run, when there's no previous note to copy. With both off, the note is created empty.
 
 ## Works for many conventions
 

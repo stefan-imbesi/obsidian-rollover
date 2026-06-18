@@ -17,6 +17,7 @@ export async function runRollover(app: App, settings: RolloverSettings): Promise
 	if (!folder) return; // resolveTargetFolder shows the relevant Notice
 
 	const pending = findPendingNotes(app, folder, settings);
+	let carriedContent: string | null = null;
 	if (pending.length > 0) {
 		pending.sort((a, b) => b.date.valueOf() - a.date.valueOf());
 		if (pending.length > 1) {
@@ -24,10 +25,15 @@ export async function runRollover(app: App, settings: RolloverSettings): Promise
 				"Rollover: Multiple open notes found — closed the most recent. Check your folder for others."
 			);
 		}
-		await renameToDone(app, pending[0].file, settings);
+		const target = pending[0].file;
+		if (settings.carryOverContent) {
+			// Copy the previous note's content forward before closing it.
+			carriedContent = await app.vault.read(target);
+		}
+		await renameToDone(app, target, settings);
 	}
 
-	await createTodayNote(app, folder, settings);
+	await createTodayNote(app, folder, settings, carriedContent);
 }
 
 /** Whether the active note's name ends with the configured pending marker. */
@@ -111,7 +117,12 @@ async function renameToDone(app: App, file: TFile, settings: RolloverSettings): 
 	}
 }
 
-async function createTodayNote(app: App, folder: TFolder, settings: RolloverSettings): Promise<void> {
+async function createTodayNote(
+	app: App,
+	folder: TFolder,
+	settings: RolloverSettings,
+	carriedContent: string | null
+): Promise<void> {
 	const newBasename = formatDate(settings.dateFormat) + settings.noteLabel + settings.pendingMarker;
 	const newPath = normalizePath(joinPath(folder.path, `${newBasename}.md`));
 
@@ -124,7 +135,8 @@ async function createTodayNote(app: App, folder: TFolder, settings: RolloverSett
 		return;
 	}
 
-	const content = await buildContent(app, settings);
+	// Precedence: carried-forward content (including an empty note) > template > empty.
+	const content = carriedContent ?? (await buildContent(app, settings));
 	const created = await app.vault.create(newPath, content);
 	new Notice(`→ ${newBasename} created.`);
 

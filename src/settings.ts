@@ -12,7 +12,8 @@ export interface RolloverSettings {
 	pendingMarker: string; // marks an open note, e.g. " —"
 	doneMarker: string; // replaces the pending marker when closed, e.g. " ✓"
 
-	// — Template —
+	// — New note content —
+	carryOverContent: boolean; // seed today's note with a copy of the previous note
 	templatePath: string; // vault-relative path to a .md template file, or ""
 
 	// — Behaviour —
@@ -27,6 +28,7 @@ export const DEFAULT_SETTINGS: RolloverSettings = {
 	noteLabel: "",
 	pendingMarker: " —",
 	doneMarker: " ✓",
+	carryOverContent: false,
 	templatePath: "",
 	openOnCreate: true,
 	showRenameNotice: true,
@@ -212,8 +214,20 @@ export class RolloverSettingTab extends PluginSettingTab {
 		};
 		refreshPreviews();
 
-		// ── Template ──────────────────────────────────────────────────────
-		new Setting(containerEl).setName("Template").setHeading();
+		// ── New note content ──────────────────────────────────────────────
+		new Setting(containerEl).setName("New note content").setHeading();
+
+		new Setting(containerEl)
+			.setName("Carry over previous content")
+			.setDesc(
+				"Start today's note as a copy of the previous note's content. Falls back to the template (or an empty note) when there's no previous note to copy."
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(s.carryOverContent).onChange((value) => {
+					s.carryOverContent = value;
+					saveNow();
+				})
+			);
 
 		const templateSetting = new Setting(containerEl).setName("Template file");
 		templateSetting.descEl.empty();
