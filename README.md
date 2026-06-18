@@ -1,19 +1,19 @@
 # Rollover
 
-A lightweight Obsidian plugin for date-stamped note workflows. One command **closes the previous dated note and opens today's** — renaming the old note to mark it done and creating a fresh, date-stamped note in the same folder.
+A lightweight Obsidian plugin for date-stamped note workflows. One command **closes the previous dated note and opens the next one** — renaming the old note to mark it done and creating a fresh, date-stamped note in the same folder.
 
 It's fully configurable, so it adapts to any naming convention rather than a single hard-coded format.
 
 ## What it does
 
-Running **Roll over to today's note**:
+Running **Roll over to the next note**:
 
 1. **Finds** the most recent open note in the target folder — a note whose name ends with your *pending marker*.
 2. **Closes** it by replacing the pending marker with your *done marker*, using Obsidian's `FileManager.renameFile` so internal links to the note update automatically.
-3. **Creates** a new note named with today's real date plus your label and pending marker, in the same folder.
+3. **Creates** a new note named with the next date, plus your label and pending marker, in the same folder.
 4. **Fills** the new note — optionally carrying over a copy of the previous note's content, or applying a template with token substitution (otherwise it's empty).
 
-Because the new note always uses today's actual date (never "previous + 1"), it works correctly even when you skip days — weekends, holidays, or any gap.
+**How the date is chosen:** normally it's today's real date — so after you skip days (weekends, holidays) it jumps straight to today rather than a wrong in-between date. If the note you're closing is *already* dated today or later, it advances to the day after instead, so you never end up with two notes on the same date.
 
 ### Example (default settings)
 
@@ -24,7 +24,7 @@ A folder containing:
 2026-06-17 —     ← today's open note
 ```
 
-Run **Roll over to today's note** on 18 June and you get:
+Run **Roll over to the next note** on 18 June and you get:
 
 ```
 2026-06-16 ✓
@@ -36,7 +36,7 @@ Run **Roll over to today's note** on 18 June and you get:
 
 | Command | Description |
 | --- | --- |
-| **Roll over to today's note** | Close the most recent open note, then create today's note. |
+| **Roll over to the next note** | Close the most recent open note, then create the next dated note (today's, or the day after the closed note if that's already today or later). |
 | **Mark current note as done** | Close only the active note (pending → done). Appears only when the active note's name ends with the pending marker. |
 
 Neither command sets a default hotkey — assign your own in **Settings → Hotkeys**.

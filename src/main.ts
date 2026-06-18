@@ -10,7 +10,7 @@ export default class RolloverPlugin extends Plugin {
 
 		this.addCommand({
 			id: "roll-over",
-			name: "Roll over to today's note",
+			name: "Roll over to the next note",
 			callback: () => {
 				void this.runRolloverSafely();
 			},

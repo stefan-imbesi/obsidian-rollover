@@ -18,6 +18,7 @@ export async function runRollover(app: App, settings: RolloverSettings): Promise
 
 	const pending = findPendingNotes(app, folder, settings);
 	let carriedContent: string | null = null;
+	let previousDate: MomentInstance | null = null;
 	if (pending.length > 0) {
 		pending.sort((a, b) => b.date.valueOf() - a.date.valueOf());
 		if (pending.length > 1) {
@@ -26,6 +27,7 @@ export async function runRollover(app: App, settings: RolloverSettings): Promise
 			);
 		}
 		const target = pending[0].file;
+		previousDate = pending[0].date;
 		if (settings.carryOverContent) {
 			// Copy the previous note's content forward before closing it.
 			carriedContent = await app.vault.read(target);
@@ -33,7 +35,7 @@ export async function runRollover(app: App, settings: RolloverSettings): Promise
 		await renameToDone(app, target, settings);
 	}
 
-	await createTodayNote(app, folder, settings, carriedContent);
+	await createNextNote(app, folder, settings, carriedContent, previousDate);
 }
 
 /** Whether the active note's name ends with the configured pending marker. */
@@ -117,18 +119,28 @@ async function renameToDone(app: App, file: TFile, settings: RolloverSettings): 
 	}
 }
 
-async function createTodayNote(
+async function createNextNote(
 	app: App,
 	folder: TFolder,
 	settings: RolloverSettings,
-	carriedContent: string | null
+	carriedContent: string | null,
+	previousDate: MomentInstance | null
 ): Promise<void> {
-	const newBasename = formatDate(settings.dateFormat) + settings.noteLabel + settings.pendingMarker;
+	// Advance the date: today normally; but if the note we just closed is dated
+	// today or later, use the day after it — so the new note never collides with
+	// the date we closed, while still jumping straight to today after skipped days.
+	const today = now();
+	const targetDate =
+		previousDate && !today.isAfter(previousDate, "day")
+			? previousDate.clone().add(1, "day")
+			: today;
+	const newBasename =
+		formatDate(settings.dateFormat, targetDate) + settings.noteLabel + settings.pendingMarker;
 	const newPath = normalizePath(joinPath(folder.path, `${newBasename}.md`));
 
 	const existing = app.vault.getAbstractFileByPath(newPath);
 	if (existing instanceof TFile) {
-		new Notice("Rollover: Today's note already exists.");
+		new Notice("Rollover: A note for that date already exists.");
 		if (settings.openOnCreate) {
 			await app.workspace.getLeaf(false).openFile(existing);
 		}
